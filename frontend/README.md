@@ -71,3 +71,9 @@ export default defineConfig([
   },
 ])
 ```
+
+//iotprogram/frontend 에서
+npm install 
+npm install axios
+npm install react-router-dom
+입력

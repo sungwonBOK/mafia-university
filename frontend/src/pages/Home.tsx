@@ -16,7 +16,7 @@ export function Home() {
 
     try {
       // 1. FastAPI 서버로 데이터 전송
-      const response = await axios.post('http://localhost:8000/api/join', {
+      const response = await axios.post('http://127.0.0.1:8000/api/join', {
         nickname: nickname,
         university: university
       });
