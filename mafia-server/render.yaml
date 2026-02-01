@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: mafia-university-server
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://mafia-university.pages.dev
+      - key: PORT
+        value: 10000

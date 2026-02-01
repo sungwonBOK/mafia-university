@@ -30,3 +30,10 @@ __pycache__/
 .venv/
 venv/
 env/
+
+node_modules/
+dist/
+.env
+secret.env
+*.log
+.DS_Store

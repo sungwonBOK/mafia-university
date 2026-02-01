@@ -1,12 +1,15 @@
 // frontend/src/pages/Home.tsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios'; // axios 추가
+import axios from 'axios';
 
 export function Home() {
   const [nickname, setNickname] = useState<string>('');
   const [university, setUniversity] = useState<string>('');
   const navigate = useNavigate();
+
+  // 백엔드 서버 주소 (환경 변수 사용)
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 
   const handleStart = async () => {
     if (nickname.trim() === '' || university.trim() === '') {
@@ -15,22 +18,39 @@ export function Home() {
     }
 
     try {
-      // 1. FastAPI 서버로 데이터 전송
-      const response = await axios.post('http://127.0.0.1:8000/api/join', {
+      // 2. 노드 서버의 API 엔드포인트로 데이터 전송
+      const response = await axios.post(`${BACKEND_URL}/api/join`, {
         nickname: nickname,
         university: university
       });
 
-      if (response.data.status === 'success') {
-        // 2. 서버 응답이 성공이면 로비로 이동
+      // 3. 노드 서버는 성공 시 HTTP 상태 코드 200을 반환합니다.
+      if (response.status === 200) {
+        console.log("서버 응답:", response.data);
+        
+        // 4. 로비로 이동하면서 필요한 정보(닉네임, 학교, 유저ID 등)를 전달
         navigate('/lobby', { 
-          state: { nickname, university } 
+          state: { 
+            nickname, 
+            university,
+            userId: response.data.data?.[0]?.id // DB에서 생성된 ID가 있다면 전달
+          } 
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("백엔드 연결 실패:", error);
-      alert("서버와 연결할 수 없습니다. FastAPI가 켜져 있는지 확인하세요.");
+      
+      // 에러 메시지를 좀 더 구체적으로 표시
+      // 2. 에러가 axios 에러인지 확인하는 '타입 가드' 추가
+  if (axios.isAxiosError(error)) {
+    // 이제 이 안에서 error는 AxiosError 타입으로 안전하게 인식
+    const errorMsg = error.response?.data?.error || "서버와 연결할 수 없습니다.";
+    alert(errorMsg);
+  } else {
+    // 일반적인 에러 처리
+    alert("알 수 없는 오류가 발생했습니다.");
     }
+  }
   };
 
   return (

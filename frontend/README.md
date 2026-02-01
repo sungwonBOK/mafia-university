@@ -1,5 +1,54 @@
 # React + TypeScript + Vite
 
+//frontend 에서
+npm install 
+npm install axios
+npm install react-router-dom
+npm install socket.io-client
+
+입력
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
@@ -72,8 +121,3 @@ export default defineConfig([
 ])
 ```
 
-//iotprogram/frontend 에서
-npm install 
-npm install axios
-npm install react-router-dom
-입력

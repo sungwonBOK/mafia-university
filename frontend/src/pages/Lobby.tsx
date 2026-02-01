@@ -1,28 +1,316 @@
 // src/pages/Lobby.tsx
-import React from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { io, Socket } from 'socket.io-client';
+import './Lobby.css';
+
+interface Player {
+  id: string;
+  nickname: string;
+  university: string;
+  userId?: string;
+  isReady: boolean;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  host: string;
+  players: Player[];
+  maxPlayers: number;
+  status: 'waiting' | 'in-game' | 'finished';
+  createdAt: Date;
+}
 
 export const Lobby: React.FC = () => {
-  return (
-    <div className="home-container">
-      <div className="login-box">
-        <h1 className="title">LOBBY</h1>
-        <p className="subtitle">접속 중인 플레이어</p>
-        
-        <div style={{ 
-          backgroundColor: 'rgba(255, 255, 255, 0.1)', 
-          padding: '20px', 
-          borderRadius: '8px',
-          marginBottom: '20px',
-          textAlign: 'left'
-        }}>
-          <ul style={{ listStyle: 'none', color: 'white' }}>
-            <li>• 플레이어 1 (준비 완료)</li>
-            <li>• 플레이어 2 (대기 중...)</li>
-          </ul>
-        </div>
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { nickname, university, userId } = location.state || {};
 
-        <button className="start-button">게임 시작</button>
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [maxPlayers, setMaxPlayers] = useState(10);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+
+  // Socket.IO 연결
+  useEffect(() => {
+    if (!nickname || !university) {
+      navigate('/');
+      return;
+    }
+
+    const newSocket = io(BACKEND_URL);
+    setSocket(newSocket);
+
+    // 사용자 등록
+    newSocket.emit('register', { nickname, university, userId });
+
+    // 방 목록 업데이트 수신
+    newSocket.on('roomListUpdate', (updatedRooms: Room[]) => {
+      setRooms(updatedRooms);
+    });
+
+    // 방 생성 성공
+    newSocket.on('roomCreated', (room: Room) => {
+      setCurrentRoom(room);
+      setShowCreateModal(false);
+      setNewRoomName('');
+    });
+
+    // 방 참가 성공
+    newSocket.on('roomJoined', (room: Room) => {
+      setCurrentRoom(room);
+    });
+
+    // 방 업데이트
+    newSocket.on('roomUpdate', (room: Room) => {
+      setCurrentRoom(room);
+    });
+
+    // 방 나가기 성공
+    newSocket.on('leftRoom', () => {
+      setCurrentRoom(null);
+    });
+
+    // 게임 시작
+    newSocket.on('gameStarted', (room: Room) => {
+      console.log('게임 시작!', room);
+      // TODO: 게임 화면으로 이동
+      // navigate('/game', { state: { room } });
+    });
+
+    // 에러 처리
+    newSocket.on('error', (error: { message: string }) => {
+      alert(error.message);
+    });
+
+    return () => {
+      newSocket.close();
+    };
+  }, [nickname, university, userId, navigate, BACKEND_URL]);
+
+  // 방 생성
+  const handleCreateRoom = () => {
+    if (!newRoomName.trim()) {
+      alert('방 이름을 입력해주세요!');
+      return;
+    }
+
+    socket?.emit('createRoom', {
+      roomName: newRoomName,
+      maxPlayers: maxPlayers
+    });
+  };
+
+  // 방 참가
+  const handleJoinRoom = (roomId: string) => {
+    socket?.emit('joinRoom', roomId);
+  };
+
+  // 방 나가기
+  const handleLeaveRoom = () => {
+    socket?.emit('leaveRoom');
+  };
+
+  // 준비 토글
+  const handleToggleReady = () => {
+    socket?.emit('toggleReady');
+  };
+
+  // 게임 시작
+  const handleStartGame = () => {
+    socket?.emit('startGame');
+  };
+
+  // 방 목록 필터링
+  const filteredRooms = rooms.filter(room =>
+    room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    room.players.some(p => p.nickname.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // 방에 참가 중인 경우
+  if (currentRoom) {
+    const isHost = currentRoom.host === socket?.id;
+    const currentPlayer = currentRoom.players.find(p => p.id === socket?.id);
+
+    return (
+      <div className="lobby-container">
+        <div className="room-view">
+          <div className="room-header">
+            <h1>{currentRoom.name}</h1>
+            <button className="leave-button" onClick={handleLeaveRoom}>
+              방 나가기
+            </button>
+          </div>
+
+          <div className="room-info">
+            <span>방장: {currentRoom.players.find(p => p.id === currentRoom.host)?.nickname}</span>
+            <span>인원: {currentRoom.players.length}/{currentRoom.maxPlayers}</span>
+            <span className={`status-badge ${currentRoom.status}`}>
+              {currentRoom.status === 'waiting' ? '대기중' : '게임중'}
+            </span>
+          </div>
+
+          <div className="players-section">
+            <h2>플레이어 목록</h2>
+            <div className="players-grid">
+              {currentRoom.players.map((player) => (
+                <div key={player.id} className={`player-card ${player.isReady ? 'ready' : ''}`}>
+                  <div className="player-info">
+                    <span className="player-name">{player.nickname}</span>
+                    <span className="player-university">{player.university}</span>
+                  </div>
+                  <div className="player-status">
+                    {player.id === currentRoom.host && <span className="host-badge">방장</span>}
+                    <span className={`ready-badge ${player.isReady ? 'ready' : ''}`}>
+                      {player.isReady ? '준비완료' : '대기중'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="room-actions">
+            {!isHost && (
+              <button 
+                className="ready-button" 
+                onClick={handleToggleReady}
+              >
+                {currentPlayer?.isReady ? '준비 취소' : '준비'}
+              </button>
+            )}
+            {isHost && (
+              <button 
+                className="start-button" 
+                onClick={handleStartGame}
+              >
+                게임 시작
+              </button>
+            )}
+          </div>
+        </div>
       </div>
+    );
+  }
+
+  // 로비 화면
+  return (
+    <div className="lobby-container">
+      <div className="lobby-header">
+        <div className="user-info">
+          <h2>환영합니다, {nickname}님!</h2>
+          <p>{university}</p>
+        </div>
+        <div className="lobby-stats">
+          <span>온라인: {rooms.reduce((sum, r) => sum + r.players.length, 0)}명</span>
+          <span>방 개수: {rooms.length}개</span>
+        </div>
+      </div>
+
+      <div className="lobby-controls">
+        <button className="create-room-btn" onClick={() => setShowCreateModal(true)}>
+          + 방 만들기
+        </button>
+        <input
+          type="text"
+          className="search-input"
+          placeholder="방 이름 또는 플레이어 검색..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <button className="refresh-btn" onClick={() => socket?.emit('getRooms')}>
+          🔄 새로고침
+        </button>
+      </div>
+
+      <div className="rooms-section">
+        <h2>대기중인 방</h2>
+        {filteredRooms.length === 0 ? (
+          <div className="no-rooms">
+            <p>현재 대기중인 방이 없습니다.</p>
+            <p>새로운 방을 만들어보세요!</p>
+          </div>
+        ) : (
+          <div className="rooms-grid">
+            {filteredRooms.map((room) => (
+              <div key={room.id} className={`room-card ${room.status}`}>
+                <div className="room-card-header">
+                  <h3>{room.name}</h3>
+                  <span className={`status-badge ${room.status}`}>
+                    {room.status === 'waiting' ? '대기중' : '게임중'}
+                  </span>
+                </div>
+                <div className="room-card-info">
+                  <p>방장: {room.players.find(p => p.id === room.host)?.nickname}</p>
+                  <p>인원: {room.players.length}/{room.maxPlayers}</p>
+                </div>
+                <div className="room-card-players">
+                  {room.players.slice(0, 3).map((player, idx) => (
+                    <span key={idx} className="player-tag">
+                      {player.nickname}
+                    </span>
+                  ))}
+                  {room.players.length > 3 && (
+                    <span className="player-tag more">+{room.players.length - 3}</span>
+                  )}
+                </div>
+                <button
+                  className="join-button"
+                  onClick={() => handleJoinRoom(room.id)}
+                  disabled={room.status !== 'waiting' || room.players.length >= room.maxPlayers}
+                >
+                  {room.status !== 'waiting' ? '게임중' : 
+                   room.players.length >= room.maxPlayers ? '만원' : '입장'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 방 생성 모달 */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>새 방 만들기</h2>
+            <div className="modal-form">
+              <label>
+                방 이름
+                <input
+                  type="text"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  placeholder="방 이름을 입력하세요..."
+                  maxLength={30}
+                />
+              </label>
+              <label>
+                최대 인원
+                <select value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))}>
+                  <option value={4}>4명</option>
+                  <option value={6}>6명</option>
+                  <option value={8}>8명</option>
+                  <option value={10}>10명</option>
+                </select>
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={() => setShowCreateModal(false)}>
+                취소
+              </button>
+              <button className="confirm-btn" onClick={handleCreateRoom}>
+                생성
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

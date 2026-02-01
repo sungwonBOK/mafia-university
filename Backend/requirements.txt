@@ -1,0 +1,6 @@
+설치해야할것
+
+fastapi
+uvicorn
+superbase
+pydantic
